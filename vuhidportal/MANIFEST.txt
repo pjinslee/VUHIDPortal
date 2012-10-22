@@ -1,0 +1,25 @@
+MANIFEST.txt
+
+After unzipping "vuhidportal.zip", you should find the following files and directory structure within "vuhidportal":
+
+.
+└── vuhidportal
+    ├── INSTALL.txt                       <--- Installation instructions.
+    ├── MANIFEST.txt                      <--- This document that you're reading now.
+    ├── sql
+    │   ├── transactions.sql              <--- Used by the database installer scripts below.
+    │   └── vuhid-portal.sql              <---/
+    ├── tools
+    │   ├── database_installer.bat        <--- For installing on Windows.
+    │   ├── database_installer.sh         <--- For installing on Linux.
+    │   └── deploy.bat                    <--- For installing on Windows.
+    ├── vuhidportal.war                   <--- The actual web application to deploy in GlassFish
+    └── vuhid_tools
+        ├── Certificates
+        │   ├── your_keystore.keystore    <--- Dummy placeholders. Contact GPII to get a certificate for authentication.
+        │   └── your_truststore.keystore  <---/
+        └── config
+            ├── empi.properties           <--- Configuration files that need some empty fields filled before running.
+            ├── server.properties         <---/ /
+            └── vuhid.properties          <----/
+
