@@ -1,0 +1,413 @@
+INSTALL.txt
+
+PREFACE
+
+This document describes about the simplest possible way to get the VUHIDPortal up and running, so these instructions are NOT for production use. To really deploy this application responsibly would require expert consultation about server security and administration. Also, since the VUHIDPortal itself is just a prototype with much of its configuration currently "hardwired", it ought to be refactored or rewritten from scratch and tested before even considering it for "real world" use.
+
+The "vuhidportal" package (in the "prebuilt" branch) contains all the necessary configuration files, scripts, and the WAR file, pre-compiled and ready for installation, with the exception of the X.509 certificates required for authenticating HTTPS transactions with the VUHID test server. Contact Global Patient Identifiers, Inc. for more information about this.
+
+HOWTO INSTALL VUHIDPORTAL ON UBUNTU SERVER 12.04 - SHORT VERSION
+
+You can do all of this on a desktop version of Ubuntu as well, or on another Linux distribution if you substitute the correct package management commands when necessary. I did this same installation process all on my laptop, running a standard desktop version of Ubuntu, and was able to view the VUHIDPortal from a browser on the same laptop, and also from other computers on the LAN. If anything, the desktop approach is easier, since the server approach I describe below relies entirely on the command-line.
+
+    0) Install Ubuntu Server
+    1) Install Glassfish
+    2) Install MySQL
+    3) Install VUHIDPortal in Glassfish
+    4) Create MySQL database for transaction logging, and configure VUHIDPortal
+    5) Start Glassfish and navigate a browser to the VUHIDPortal URL
+
+HOWTO INSTALL VUHIDPORTAL ON UBUNTU SERVER 12.04 - LONG VERSION
+
+    0) Install Ubuntu Server
+    0.1) Download the "PC (Intel x86) server install" from link [1] below, the latest stable ISO. Burn it to CD, and install it without adding any extra software or features. By default, after the installation you end up with one regular user with sudo priveleges ("peter" in my case), and the "root" user. Replace all instances of "peter" below with your username.
+    0.2) Set the root user's password. (This is not really necessary for our purposes, but it's a good idea to do immediately.):
+
+peter> sudo su root
+[sudo] password for peter:                              (enter your password)
+root# passwd
+Enter new UNIX password:                                (enter new root password)
+Retype new UNIX password:                               (confirm password)
+passwd: password updated successfully
+root# exit
+exit
+peter>
+
+    0.3) Make sure the system is up-to-date:
+
+peter> sudo apt-get update
+    ...
+peter> sudo apt-get dist-upgrade                        (Will prompt for confirmation.)
+    ...
+peter> sudo apt-get autoremove                          (May also prompt for confirmation, but may not need to do anything.)
+    ...
+peter>
+
+    1) Install Glassfish
+    1.1) A prerequisite for Glassfish and VUHIDPortal is Java 7. (Some of these commands prompt for confirmation.):
+
+peter> sudo apt-get install python-software-properties  (To use "add-apt-repository" in the next command.)
+    ...
+peter> sudo add-apt-repository ppa:webupd8team/java     (To access and maintain packages for Java 7. See link [2] below.)
+    ...
+peter> sudo apt-get update                              (To update the package manager so it's aware of the new remote repository.)
+    ...
+peter> sudo apt-get install oracle-java7-installer      (To install Oracle JDK 7.)
+    ...
+peter> ls /usr/lib/jvm/
+java-7-oracle
+peter>
+
+    1.2) Download and install Glassfish (See link [3] below.):
+
+peter> cd /home/peter                                   (Start in the home directory for the regular user.)
+peter> mkdir downloads
+peter> cd downloads
+peter/downloads> wget http://download.java.net/glassfish/3.1.2.2/release/glassfish-3.1.2.2.zip
+    ...
+peter/downloads> sudo apt-get install unzip             (To use "unzip" in next command.)
+    ...
+peter/downloads> unzip glassfish-3.1.2.2.zip
+    ...
+peter/downloads> ls
+glassfish3  glassfish-3.1.2.2.zip
+peter/downloads> mv glassfish3/* /home/peter/
+peter/downloads> mv glassfish3/.org.opensolaris,pkg/ /home/peter/ (Required to move hidden folder.)
+peter/downloads> rmdir glassfish3                       (Clean up empty directory.)
+peter/downloads> cd /home/peter
+peter> ls
+bin  downloads  glassfish  javadb  mq  pkg
+peter>
+
+    1.3) Set environment variables so the system knows where to find Java and Glassfish. (See link [4] below):
+
+peter> sudo vim /etc/bash.bashrc                        (Append the following lines to the end of the file.)
+export GLASSFISH_HOME=/home/peter
+export JAVA_HOME=/usr/lib/jvm/java-7-oracle
+export PATH=$PATH:$JAVA_HOME/bin:$GLASSFISH_HOME/bin
+peter> sudo vim /etc/environment                        (Append the following lines to the end of the file.)
+JAVA_HOME=/usr/lib/jvm/java-7-oracle
+AS_JAVA=/usr/lib/jvm/java-7-oracle
+peter>
+
+    2) Install MySQL. (See link [5] below.):
+
+peter> sudo apt-get install mysql-server mysql-client
+    ...
+(You will be prompted for confirmation to install.)
+    ...
+(You will be prompted to set and confirm a MySQL "root" password, which is not related to the system "root" password set above, although it can be the same. We will use it in step 4 below.)
+    ...
+peter>
+
+    3) Install VUHIDPortal in Glassfish
+    3.1) Install "git" to download VUHIDPortal from the GitHub project site. (Note that if you have a browser installed, you could just navigate to the "prebuilt" branch of the repository, and click on the "ZIP" button to download it, in which case the "git" installation is unnecessary.) 
+
+peter> sudo apt-get install git-core                (Will prompt for confirmation.)
+    ...
+peter> git clone https://github.com/pjinslee/VUHIDPortal.git
+    ...
+(This copies the repository to your machine. It may take a couple minutes...)
+    ...
+peter> cd VUHIDPortal/                              (Enter the local repository.)
+peter/VUHIDPortal> git checkout prebuilt            (Switch to the "prebuilt" branch.)
+Branch prebuilt set up to track remote branch prebuilt from origin.
+Switched to a new branch 'prebuilt'
+peter/VUHIDPortal> cp -r vuhidportal/* /home/peter/downloads
+peter/VUHIDPortal> cd /home/peter/downloads
+peter/downloads> ls
+glassfish-3.1.2.2.zip  sql  tools  vuhidportal.war  vuhid_tools
+peter/downloads>
+
+    3.2) Deploy the VUHIDPortal web application itself to the Glassfish servlet container:
+
+peter/downloads> mv vuhidportal.war /home/peter/glassfish/domains/domain1/autodeploy/
+peter/downloads>
+
+    4) Create MySQL database for transaction logging, and configure VUHIDPortal
+    4.1) Create the MySQL database using the "database_installer.sh" script.
+
+peter/downloads> cd tools
+peter/downloads/tools> chmod +x database_installer.sh (Make the script executable.)
+peter/downloads/tools> ./database_installer.sh        (Run the script.)
+    ...
+(When prompted, hit "Enter" to accept the default hostname, default database name, and default user. Supply the MySQL "root" password you provided in step 2 above. Finally, enter 'f' as your choice, for "Full installation".
+    ...
+peter/downloads/tools> cd ..
+peter/downloads>
+
+    4.2) Add the MySQL "root" password to the "server.properties" configuration file:
+
+peter/downloads> vim vuhid_tools/config/server.properties
+    ...
+# Database user info (using root user is not recommended)   (<-We can ignore this warning for now.)
+Login = root
+Password =                                                  (Line 14; enter the MySQL "root" password here.)
+MaximnumDbConnections = 50
+peter/downloads>
+
+    4.3) Install the X509 certificates and configuration files in Glassfish. (You will have to populate the "vuhid_tools/Certificates" directory with certificates that work, and adjust the configuration files to correspond with your certificates.):
+
+peter/downloads> mv vuhid_tools /home/peter/glassfish/domains/domain1/config/
+peter/downloads> cd ..
+peter>
+
+    5) Start Glassfish and navigate a browser to the VUHIDPortal URL
+    5.1) Start the Glassfish servlet container:
+
+peter> bin/asadmin start-domain domain1
+Waiting for domain1 to start ......................
+Successfully started the domain : domain1
+domain  Location: /home/peter/glassfish/domains/domain1
+Log File: /home/peter/glassfish/domains/domain1/logs/server.log
+Admin Port: 4848
+Command start-domain executed successfully.
+peter>
+
+    5.2) Determine IP address of your Ubuntu server running Glassfish. (Your output will almost definitely be different than the first few lines of output I show here from my machine.)
+
+peter> ifconfig
+eth0        Link encap:Ethernet  HWaddr ...
+            inet addr:192.168.1.114  Bcast:192.168.1.255  Mask:255.255.255.0 (<-Copy the "inet addr" from this line.)
+            inet6 addr: fe80::20c:6eff:fe69:b0cf/64 Scope:Link
+    ...
+peter>
+
+    5.3) Start using the VUHIDPortal. On another machine on the LAN, open a browser, and enter the following URL in the navigation bar:
+
+http://(your IP address from step 5.2 above):8080/vuhidportal/
+
+    For example, I entered:
+
+http://192.168.1.114:8080/vuhidportal/
+
+    If you have a browser installed on the same machine as the Glassfish installation, you can use it by navigating to the following URL instead:
+
+http://localhost:8080/vuhidportal/
+
+    5.1) When you are finished, stop the Glassfish container:
+
+peter> bin/asadmin stop-domain domain1
+Waiting for domain1 to stop ......................
+Command stop-domain executed successfully.
+peter>
+
+LINKS
+
+[1] About downloading and installing Ubuntu Server 12.04:
+    http://releases.ubuntu.com/12.04/
+[2] About installing Oracle JDK 7 on Ubuntu:
+    http://www.webupd8.org/2012/01/install-oracle-java-jdk-7-in-ubuntu-via.html
+[3] About installing Glassfish on Ubuntu:
+    http://www.nabisoft.com/tutorials/glassfish/installing-glassfish-311-on-ubuntu#Step3
+[4] I chose to use the method in link [2] instead of the method in this link for installing JDK 7, but I still followed the advice about setting environment variables at the bottom of this section:
+    http://www.nabisoft.com/tutorials/glassfish/installing-glassfish-311-on-ubuntu#Step2
+[5] About installing MySQL on Ubuntu:
+    http://ariejan.net/2007/12/12/how-to-install-mysql-on-ubuntudebian
+
+HOW TO INSTALL VUHIDPORTAL ON WINDOWS SERVER 2003 - SHORT VERSION
+
+I performed this entire installation once on a PC running Windows XP Professional, and then again on Windows Server 2003. To install on the server version, I copied all the necessary installer files to a thumb drive and transferred them manually to the machine. (Otherwise I would have had to override the server's security settings to allow downloads using the browser, etc.) After this process, you should be able to view the VUHIDPortal from a browser on the same server, and also from other computers on the LAN.
+
+Fundamentally there is no real difference between the installation on Ubuntu vs. on Windows, but superficially the installation on Windows will seem different, as I describe how to do everything using wizards instead of from the command prompt. I've changed the order slightly for the sake of convenience and simplicity in this write-up.
+
+    0) Install Windows Server 2003
+    1) Download installers and vuhidportal, and copy them to the server.
+    2) Install JDK 7
+    3) Install GlassFish
+    4) Install MySQL
+    5) Create MySQL database for transaction logging
+    6) Configure VUHIDPortal and deploy it in GlassFish
+    7) Start GlassFish and navigate a browser to the VUHIDPortal URL
+
+HOW TO INSTALL VUHIDPORTAL ON WINDOWS SERVER 2003 - LONG VERSION
+
+Two qualifications, before I begin:
+* I'm running x86. If you are running x64, you will want to replace the x86 versions I cite below with x64 versions.
+* When I installed on Windows XP, the "Local Drive" letter was "C:\" which is the default letter expected by the installers and VUHIDPortal. When I installed on Windows Server 2003, however, I found that the drive was labeled "G:\", so I had to adapt. If you find this to be the case, make the obvious substitutions as you encounter them in my instructions below, and also be sure to edit two installation scripts that are included in "vuhidportal.zip". Once extracted, you will find:
+    - "vuhidportal/tools/database_installer.bat" - on line 11: "set mysqlBinPath=C:\Program Files\..."
+    - "vuhidportal/tools/deploy.bat" - on line 2: "set GlassFishPath=C:\Program Files\..."
+
+    0) Install Windows Server 2003:
+    0.1) I was able to get an ISO for free as a CS student at PSU, through a partner program they have with Microsoft. I burned it to disc, and installed it on an empty partition.
+
+    0.2) MySQL requires the .NET framework. If you don't already have it installed:
+        * Go to "Start -> Administrative Tools -> Manage Your Server".
+        * Under "Tools and Updates" in the window on the right, click "Windows Update".
+        * In the browser window that opens for Windows Update, under "Select by Type" in the panel on the left click on "Software, Optional(some number)".
+        * Select "Microsoft .NET Framework 4 for Windows Server 2003 x86 (KB982671)", then click "Review and Install Updates".
+        * Click "Install Updates" on the page that appears. It will take a few minutes to install.
+ 
+    0.3) Make sure the system is up-to-date:
+        * Once the installation in step 0.2 completes, return to "Windows Update Home" by clicking the link on the left.
+        * Click the "Express" button to check again for updates.
+        * Click "Install Updates" to install all high-priority updates. You'll have to wait again.
+        * Go through this process one more time to be sure there are no more updates to install. Restart the machine if requested to do so.
+
+    1) Download installers and vuhidportal, and copy them to the server.
+    1.1) Download JDK 7 from http://www.oracle.com/technetwork/java/javase/downloads/jdk7u7-downloads-1836413.html
+        * Accept the license agreement.
+        * Click on "jdk-7u7-windows-i586.exe" to download the installer for the Java SE Development Kit 7u7 for Windows x86.
+
+    1.2) Download GlassFish from http://glassfish.java.net/downloads/3.1.2.2-final.html
+        * Click on "glassfish-3.1.2.2-windows.exe" to download the installer for the Full Platform Open Source Edition of GlassFish Server 3.1.2.2.
+
+    1.3) Download MySQL from http://dev.mysql.com/downloads/installer/
+        * Click to "Download" the "mysql-installer-community-5.5.28.1.msi" MySQL Installer for Microsoft Windows.
+        * You will be prompted to register, but you can side-step that by clicking ">> No thanks, just start my download!".
+
+    1.4) Download VUHIDPortal from https://github.com/pjinslee/VUHIDPortal/tree/prebuilt, by clicking the "ZIP" download button.
+
+    1.5) Transfer all 4 of these files to your server. I copied them to a USB flash drive, and then to the Desktop.
+
+    2) Install JDK 7 (a prerequisite for GlassFish and VUHIDPortal)
+        * Double click on the java installer "jdk-7u7-windows-i586.exe" to open the installer wizard.
+        * Click "Next" to select components to install.
+        * You can right-click on "Source Code" to deselect it if you want (we don't need it), or just leave the defaults and click "Next".
+        * When prompted, accept the default installation directory, "C:\Program Files\Java\jre7\".
+        * You should see a window saying "Java SE Development Kit 7 Update 7 Successfully Installed". Click "Close" to finish.
+        * You will soon be surprised by a browser window popping up to prompt you to register the JDK. I didn't bother.
+
+    3) Install GlassFish
+    3.1) Install GlassFish:
+        * Double click on the GlassFish installer "glassfish-3.1.2.2-windows.exe" to open the installer wizard.
+        * Click "Next" when the "Introduction" appears.
+        * Accept the default "Typical Installation" when the "Installation Type" window appears by clicking "Next".
+        * When the "Install Directory" window opens, change the directory to "C:\Program Files\glassfish-3.1.2\", and click "Next".
+        * On the "Update Tool" page I unchecked "Install Update Tool" for the purposes of this walkthrough. Click "Next".
+        * Click "Install" when the "Ready to Install" window appears.
+        * Enter and reenter a password on the "Domain Info" page, and leave the defaults for everything else. Click "Next".
+        * The "Config Results" window should appear showing the console output of the configuration process. Once the "Starting domain...Please look at the server log for more details....." output appears, the "Next" button should become active, and you can click it.
+        * A "Summary" window should appear, and you can then click "Exit".
+        * You will once again be prompted in a browser window to register the product. I ignored it.
+
+    3.2) Test GlassFish:
+        * While the browser is open, type "http://localhost:8080/" into the navigation bar. The GlassFish Server page should appear saying that "Your server is now running". Close the browser.
+
+    3.3) Stop GlassFish:
+        * Open a command prompt (Start -> Accessories -> Command Prompt), and run:
+
+C:\Documents and Settings\Administrator>C:\Program Files\glassfish-3.1.2\glassfish\bin\asadmin stop-domain domain1
+Waiting for the domain to stop ..
+Command stop-domain executed successfully.
+
+C:\Documents and Settings\Administrator>
+
+    4) Install MySQL
+        * Double click the MySQL installer "mysql-installer-community-5.5.28.1.msi".
+        * At the "Welcome" screen, select "Install MySQL Products".
+        * Accept the License Agreement and click "Next".
+        * On the "Find latest products" screen", click "Execute" to allow the installer to fetch product update information. Then click "Next" to continue.
+        * On the "Choosing a Setup Type" screen, select "Custom", and accept the default "Installation Path" and "Data Path".
+        * On the "Feature Selection" screen, all features are selected by default on the left. You can either accept the defaults, and install everything, or uncheck everything except the "MySQL Server 5.5.28" and "Connector/J 5.1.20.0" under "MySQL Connectors", as these are the only two features we need. Click "Next".
+        * On the "Check Requirements" screen, it should be the case that no additional requirements need to be installed. Click "Next".
+        * On the "Installation Progress" screen, click "Execute" to install the listed packages. When all packages have a status of "Install Success", click "Next".
+        * On the "Configuration Overview" screen, click "Next" to configure the MySQL server.
+        * Accept all the defaults on the "MySQL Sever Configuration 1/3" screen, by clicking "Next".
+        * Enter and reenter a "Root Account Password" on the "MySQL Server Configuration 2/3" screen, and click "Next".
+        * Accept all the defaults on the "MySQL Sever Configuration 3/3" screen, by clicking "Next".
+        * On the "Configuration Overview" screen, click "Next" when the configuration is complete.
+        * On the "Installation Complete" screen, click "Finish".
+
+    5) Create MySQL database for transaction logging
+        * Unzip "vuhidportal.zip" on the Desktop, and note that the extracted "vuhidportal" has the following directory structure:
+
+		.
+		└── vuhidportal
+			├── INSTALL.txt                       <--- These installation instructions.
+			├── MANIFEST.txt                      <--- Shows this directory structure.
+			├── sql
+			│   ├── transactions.sql              <--- Used by the database installer scripts below.
+			│   └── vuhid-portal.sql              <---/
+			├── tools
+			│   ├── database_installer.bat        <--- For installing on Windows.
+			│   ├── database_installer.sh         <--- For installing on Linux.
+			│   └── deploy.bat                    <--- For installing on Windows.
+			├── vuhidportal.war                   <--- The actual web application to deploy in GlassFish
+			└── vuhid_tools
+				├── Certificates
+				│   ├── your_keystore.keystore    <--- Dummy placeholders. Contact GPII to get a certificate for authentication.
+				│   └── your_truststore.keystore  <---/
+				└── config
+				    ├── empi.properties           <--- Configuration files that need some empty fields filled before running.
+				    ├── server.properties         <---/ /
+				    └── vuhid.properties          <----/
+
+
+        * Open "vuhidportal\tools\" in the file browser, and right-click on "database_installer.bat" to edit it in Notepad.
+        * Add the "Root Account Password" (that you entered in step 4 above) immediately after "set dbpass=", on line 14. Save and close the file.
+        * Double click on the "database_installer.bat" file in the file browser to execute it. In the command prompt that pops up, you should see:
+
+PLEASE EDIT THIS SCRIPT SO VALUES IN THE CONFIG SECTION MATCH YOUR DATABASE(S)
+
+Making a backup of the original loginserver database.
+mysqldump: Got error: 1049: Unknown database 'vuhid-portal' when selecting the database
+VUHID Portal DB install type: (i) install or (q) quit?
+
+        * Ignore the error message. This appears since you have not yet installed the 'vuhid-portal' database. Type "i" to install, and hit "Enter":
+
+Deleting VUHIDPortal tables for new content.
+
+Script complete.
+Press any key to continue . . .
+
+    6) Configure VUHIDPortal and deploy it in GlassFish
+    6.1) Configure VUHIDPortal. (You will have to populate the "vuhid_tools/Certificates" directory with certificates that work, and adjust the configuration files to correspond with your certificates.)
+        * Open "vuhidportal\vuhid_tools\config\" in the file browser, and right-click on "server.properties" to edit it in Notepad. (You might be prompted to select the Notepad program from a list to open it.)
+        * Add the same "Root Account Password" (that you entered in step 4 above) immediately after "Password = ", on line 14. Save and close the file.
+        * Right-click on "vuhid.properties" to edit it in Notepad.
+        * Replace all the empty fields with info corresponding to your certificates. On line 13, change the "fromHeaderValue" to an email address you would like to use. Save and close the file.
+    6.2) Deploy VUHIDPortal in GlassFish
+        * Open a command prompt (Start -> Accessories -> Command Prompt), and execute the "deploy.bat" script:
+
+C:\Documents and Settings\Administrator>chdir Desktop\vuhidportal\tools
+
+C:\Documents and Settings\Administrator\Desktop\vuhidportal\tools>deploy.bat
+        1 file(s) copied.
+.\..\vuhid_tools\Certificates\your_keystore.keystore
+.\..\vuhid_tools\Certificates\your_truststore.keystore
+        2 file(s) copied.
+.\..\vuhid_tools\config\empi.properties
+.\..\vuhid_tools\config\server.properties
+.\..\vuhid_tools\config\vuhid.properties
+        3 file(s) copied.
+
+C:\Documents and Settings\Administrator\Desktop\vuhidportal\tools>chdir ../../../
+
+C:\Documents and Settings\Administrator>
+
+    7) Start GlassFish and navigate a browser to the VUHIDPortal URL
+    7.1) Start GlassFish:
+
+C:\Documents and Settings\Administrator>C:\Program Files\glassfish-3.1.2\glassfish\bin\asadmin start-domain domain1
+Waiting for domain1 to start ................
+Successfully started the domain : domain1
+domain  Location: C:\Program Files\glassfish-3.1.2\glassfish\domains\domain1
+Log File: C:\Program Files\glassfish-3.1.2\glassfish\domains\domain1\logs\server.log
+Admin Port: 4848
+Command start-domain executed successfully.
+
+C:\Documents and Settings\Administrator>
+
+    7.2) Browse to VUHIDPortal URL:
+        * Open a browser on this machine, and navigate to "http://localhost:8080/vuhidportal", and try using the application.
+        * To access VUHIDPortal from another machine on the LAN, get the IP address of your server:
+
+C:\Documents and Settings\Administrator>ipconfig
+
+Windows IP Configuration
+
+Ethernet adapter Local Area Connection:
+
+   Connection-specific DNS Suffix  . : hsd1.or.comcast.net.
+   IP Address. . . . . . . . . . . . : 192.168.1.114    (<--- use the IP address for your server)
+   Subnet Mask . . . . . . . . . . . : 255.255.255.0
+   Default Gateway . . . . . . . . . : 192.168.1.1
+
+C:\Documents and Settings\Administrator>
+
+        * Now you can open a browser on another machine in the LAN, and navigate to "http://(server IP address):8080/vuhidportal", (e.g., "http://192.168.1.114:8080/vuhidportal") to use the VUHIDPortal.
+
+    7.3) Stop GlassFish:
+        * Run the command in step 3.3 above.
+
