@@ -1,0 +1,1 @@
+C:\maven\bin\mvn assembly:assembly

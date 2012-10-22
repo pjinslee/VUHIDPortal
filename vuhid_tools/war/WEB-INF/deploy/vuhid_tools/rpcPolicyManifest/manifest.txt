@@ -1,0 +1,3 @@
+# Module vuhid_tools
+# RPC service class, partial path of RPC policy file
+vuhid_tools.client.VUHIDService, 7660854BE9691D120DC042B9A1771AD2.gwt.rpc

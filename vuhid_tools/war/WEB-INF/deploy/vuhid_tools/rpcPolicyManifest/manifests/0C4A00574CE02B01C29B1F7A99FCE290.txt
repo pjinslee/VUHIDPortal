@@ -1,0 +1,2 @@
+serviceClass: vuhid_tools.client.VUHIDService
+path: 7660854BE9691D120DC042B9A1771AD2.gwt.rpc
